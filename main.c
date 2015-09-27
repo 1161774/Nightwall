@@ -46,187 +46,52 @@
 #include "driverlib/pin_map.h"
 #include "driverlib/pwm.h"
 #include "driverlib/sysctl.h"
-#include "driverlib/uart.h"
-#include "utils/uartstdio.h"
 
-//*****************************************************************************
-//
-//! \addtogroup pwm_examples_list
-//! <h1>PWM Reload Interrupt (reload_interrupt)</h1>
-//!
-//! This example shows how to setup an interrupt on PWM0.  This example
-//! demonstrates how to setup an interrupt on the PWM when the PWM timer is
-//! equal to the configurable PWM0LOAD register.
-//!
-//! This example uses the following peripherals and I/O signals.  You must
-//! review these and change as needed for your own board:
-//! - GPIO Port B peripheral (for PWM0 pin)
-//! - PWM0 - PB6
-//!
-//! The following UART signals are configured only for displaying console
-//! messages for this example.  These are not required for operation of the
-//! PWM.
-//! - UART0 peripheral
-//! - GPIO Port A peripheral (for UART0 pins)
-//! - UART0RX - PA0
-//! - UART0TX - PA1
-//!
-//! This example uses the following interrupt handlers.  To use this example
-//! in your own application you must add these interrupt handlers to your
-//! vector table.
-//! - INT_PWM0_0 - PWM0IntHandler
-//
-//*****************************************************************************
+#include <stdlib.h>
 
-//*****************************************************************************
-//
-// The variable g_ui32SysClock contains the system clock frequency
-//
-//*****************************************************************************
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-	uint32_t g_ui32SysClock;
-#endif
 
-//*****************************************************************************
-//
-// This function sets up UART0 to be used for a console to display information
-// as the example is running.
-//
-//*****************************************************************************
-void
-InitConsole(void)
-{
-    //
-    // Enable GPIO port A which is used for UART0 pins.
-    // TODO: change this to whichever GPIO port you are using.
-    //
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+struct _LED{
+	uint32_t Position;
+	uint32_t Target;
+	uint32_t Speed;
+	uint32_t Delay;
+};
 
-    //
-    // Configure the pin muxing for UART0 functions on port A0 and A1.
-    // This step is not necessary if your part does not support pin muxing.
-    // TODO: change this to select the port/pin you are using.
-    //
-    GPIOPinConfigure(GPIO_PA0_U0RX);
-    GPIOPinConfigure(GPIO_PA1_U0TX);
+struct _LED BlueLED;
+struct _LED GreenLED;
+struct _LED RedLED;
 
-    //
-    // Enable UART0 so that we can configure the clock.
-    //
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+uint32_t g_MaxVal = 0;
 
-    //
-    // Use the internal 16MHz oscillator as the UART clock source.
-    //
-    UARTClockSourceSet(UART0_BASE, UART_CLOCK_PIOSC);
 
-    //
-    // Select the alternate (UART) function for these pins.
-    // TODO: change this to select the port/pin you are using.
-    //
-    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
-    //
-    // Initialize the UART for console I/O.
-    //
-    UARTStdioConfig(0, 115200, 16000000);
+
+
+uint32_t randint(uint32_t n) {
+  if ((n - 1) == 4294967295) {
+    return 2*rand();
+  } else {
+    // Chop off all of the values that would cause skew...
+    uint32_t end = 4294967295 / n; // truncate skew
+    end *= n;
+
+    // ... and ignore results from rand() that fall above that limit.
+    // (Worst case the loop condition should succeed 50% of the time,
+    // so we can expect to bail out of this loop pretty quickly.)
+    uint32_t r;
+    while ((r = 2*rand()) >= end);
+
+    return r % n;
+  }
 }
 
-//*****************************************************************************
-//
-// Prints out 5x "." with a second delay after each print.  This function will
-// then backspace, clear the previously printed dots, backspace again so you
-// continuously printout on the same line.  The purpose of this function is to
-// indicate to the user that the program is running.
-//
-//*****************************************************************************
-void
-PrintRunningDots(void)
-{
-    UARTprintf(". ");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-    UARTprintf(". ");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-    UARTprintf(". ");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-    UARTprintf(". ");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-    UARTprintf(". ");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-    UARTprintf("\b\b\b\b\b\b\b\b\b\b");
-    UARTprintf("          ");
-    UARTprintf("\b\b\b\b\b\b\b\b\b\b");
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    SysCtlDelay(g_ui32SysClock / 3);
-#else
-    SysCtlDelay(SysCtlClockGet() / 3);
-#endif
-}
+
 
 //*****************************************************************************
 //
-// The interrupt handler for the for PWM0 interrupts.
+// The interrupt handler for the for PWM interrupts.
 //
 //*****************************************************************************
-void
-PWM0IntHandler(void)
-{
-    //
-    // Clear the PWM0 LOAD interrupt flag.  This flag gets set when the PWM
-    // counter gets reloaded.
-    //
-    PWMGenIntClear(PWM0_BASE, PWM_GEN_0, PWM_INT_CNT_LOAD);
-
-    //
-    // If the duty cycle is less or equal to 75% then add 0.1% to the duty
-    // cycle.  Else, reset the duty cycle to 0.1% cycles.  Note that 64 is
-    // 0.01% of the period (64000 cycles).
-    //
-    if((PWMPulseWidthGet(PWM0_BASE, PWM_OUT_0) + 64) <=
-       ((PWMGenPeriodGet(PWM0_BASE, PWM_GEN_0) * 3) / 4))
-    {
-        PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0,
-                         PWMPulseWidthGet(PWM0_BASE, PWM_OUT_0) + 64);
-    }
-    else
-    {
-        PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0, 64);
-    }
-}
 
 void
 PWM1IntHandler(void)
@@ -237,20 +102,25 @@ PWM1IntHandler(void)
     //
     PWMGenIntClear(PWM1_BASE, PWM_GEN_1, PWM_INT_CNT_LOAD);
 
-    //
-    // If the duty cycle is less or equal to 75% then add 0.1% to the duty
-    // cycle.  Else, reset the duty cycle to 0.1% cycles.  Note that 64 is
-    // 0.01% of the period (64000 cycles).
-    //
-    if((PWMPulseWidthGet(PWM1_BASE, PWM_OUT_2) + 64) <=
-       ((PWMGenPeriodGet(PWM1_BASE, PWM_GEN_1) * 3) / 4))
+    if(GreenLED.Position <= (GreenLED.Target - GreenLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2,
-                         PWMPulseWidthGet(PWM1_BASE, PWM_OUT_2) + 64);
+    	GreenLED.Position += GreenLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2, GreenLED.Position);
     }
-    else
+    else if (GreenLED.Position >= (GreenLED.Target + GreenLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2, 64);
+    	GreenLED.Position -= GreenLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2, GreenLED.Position);
+    }
+    else if(--GreenLED.Delay < 5)
+    {
+	    GreenLED.Target = randint(64000);
+	    GreenLED.Speed = randint(64);
+	    GreenLED.Delay = randint(5000);
+	    if(GreenLED.Target < GreenLED.Speed)
+	    {
+	    	GreenLED.Target = GreenLED.Speed;
+	    }
     }
 }
 
@@ -263,20 +133,25 @@ PWM2IntHandler(void)
     //
     PWMGenIntClear(PWM1_BASE, PWM_GEN_2, PWM_INT_CNT_LOAD);
 
-    //
-    // If the duty cycle is less or equal to 75% then add 0.1% to the duty
-    // cycle.  Else, reset the duty cycle to 0.1% cycles.  Note that 64 is
-    // 0.01% of the period (64000 cycles).
-    //
-    if((PWMPulseWidthGet(PWM1_BASE, PWM_OUT_5) + 64) <=
-       ((PWMGenPeriodGet(PWM1_BASE, PWM_GEN_2) * 3) / 4))
+    if(RedLED.Position <= (RedLED.Target - RedLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5,
-                         PWMPulseWidthGet(PWM1_BASE, PWM_OUT_5) + 64);
+    	RedLED.Position += RedLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, RedLED.Position);
     }
-    else
+    else if (RedLED.Position >= (RedLED.Target + RedLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 64);
+    	RedLED.Position -= RedLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, RedLED.Position);
+    }
+    else if(--RedLED.Delay < 5)
+    {
+    	RedLED.Target = randint(64000);
+    	RedLED.Speed = randint(64);
+    	RedLED.Delay = randint(5000);
+	    if(RedLED.Target < RedLED.Speed)
+	    {
+	    	RedLED.Target = RedLED.Speed;
+	    }
     }
 }
 
@@ -289,22 +164,28 @@ PWM3IntHandler(void)
     //
     PWMGenIntClear(PWM1_BASE, PWM_GEN_3, PWM_INT_CNT_LOAD);
 
-    //
-    // If the duty cycle is less or equal to 75% then add 0.1% to the duty
-    // cycle.  Else, reset the duty cycle to 0.1% cycles.  Note that 64 is
-    // 0.01% of the period (64000 cycles).
-    //
-    if((PWMPulseWidthGet(PWM1_BASE, PWM_OUT_6) + 64) <=
-       ((PWMGenPeriodGet(PWM1_BASE, PWM_GEN_3) * 3) / 4))
+    if(BlueLED.Position <= (BlueLED.Target - BlueLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6,
-                         PWMPulseWidthGet(PWM1_BASE, PWM_OUT_6) + 64);
+    	BlueLED.Position += BlueLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, BlueLED.Position);
     }
-    else
+    else if (BlueLED.Position >= (BlueLED.Target + BlueLED.Speed))
     {
-        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, 64);
+    	BlueLED.Position -= BlueLED.Speed;
+        PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, BlueLED.Position);
+    }
+    else if(--BlueLED.Delay < 5)
+    {
+    	BlueLED.Target = randint(64000);
+    	BlueLED.Speed = randint(64);
+    	BlueLED.Delay = randint(5000);
+	    if(BlueLED.Target < BlueLED.Speed)
+	    {
+	    	BlueLED.Target = BlueLED.Speed;
+	    }
     }
 }
+
 
 //*****************************************************************************
 //
@@ -322,16 +203,9 @@ main(void)
     // TODO: The SYSCTL_XTAL_ value must be changed to match the value of the
     // crystal on your board.
     //
-#if defined(TARGET_IS_TM4C129_RA0) ||                                         \
-	defined(TARGET_IS_TM4C129_RA1) ||                                         \
-    defined(TARGET_IS_TM4C129_RA2)
-    g_ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_25MHZ |
-                                       SYSCTL_OSC_MAIN |
-                                       SYSCTL_USE_OSC), 25000000);
-#else
+
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_OSC | SYSCTL_OSC_MAIN |
                    SYSCTL_XTAL_16MHZ);
-#endif
 
     //
     // Set the PWM clock to the system clock.
@@ -339,28 +213,8 @@ main(void)
     SysCtlPWMClockSet(SYSCTL_PWMDIV_1);
 
     //
-    // Set up the serial console to use for displaying messages.  This is
-    // just for this example program and is not needed for PWM0 operation.
-    //
-    InitConsole();
-
-    //
-    // Display the setup on the console.
-    //
-    UARTprintf("PWM ->\n");
-    UARTprintf("  Module: PWM0\n");
-    UARTprintf("  Pin: PD0\n");
-    UARTprintf("  Duty Cycle: Variable -> ");
-    UARTprintf("0.1%% to 75%% in 0.1%% increments.\n");
-    UARTprintf("  Features: ");
-    UARTprintf("Variable pulse-width done using a reload interrupt.\n\n");
-    UARTprintf("Generating PWM on PWM0 (PD0) -> ");
-
-    //
     // The PWM peripheral must be enabled for use.
     //
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
-
     SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
 
     //
@@ -369,10 +223,26 @@ main(void)
     // information.  GPIO port B needs to be enabled so these pins can be used.
     // TODO: change this to whichever GPIO port you are using.
     //
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
-
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+
+    // Seed the random number with the current value in the PWM 1_1 count register
+    srand((*((volatile uint32_t *)0x40029094)));
+
+    GreenLED.Position = randint(64000);
+    GreenLED.Target = randint(64000);
+    GreenLED.Speed = randint(64);
+    GreenLED.Delay = randint(5000);
+
+    RedLED.Position = randint(64000);
+    RedLED.Target = randint(64000);
+    RedLED.Speed = randint(64);
+    RedLED.Delay = randint(5000);
+
+    BlueLED.Position = randint(64000);
+    BlueLED.Target = randint(64000);
+    BlueLED.Speed = randint(64);
+    BlueLED.Delay = randint(5000);
 
 
     //
@@ -382,8 +252,6 @@ main(void)
     // Consult the data sheet to see which functions are allocated per pin.
     // TODO: change this to select the port/pin you are using.
     //
-    GPIOPinConfigure(GPIO_PB6_M0PWM0);
-
     GPIOPinConfigure(GPIO_PE4_M1PWM2);
     GPIOPinConfigure(GPIO_PF1_M1PWM5);
     GPIOPinConfigure(GPIO_PF2_M1PWM6);
@@ -393,8 +261,6 @@ main(void)
     // Consult the data sheet to see which functions are allocated per pin.
     // TODO: change this to select the port/pin you are using.
     //
-    GPIOPinTypePWM(GPIO_PORTB_BASE, GPIO_PIN_6);
-
     GPIOPinTypePWM(GPIO_PORTE_BASE, GPIO_PIN_4);
     GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_1);
     GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_2);
@@ -403,9 +269,6 @@ main(void)
     //
     // Configure the PWM0 to count down without synchronization.
     //
-    PWMGenConfigure(PWM0_BASE, PWM_GEN_0,
-                    PWM_GEN_MODE_DOWN | PWM_GEN_MODE_NO_SYNC);
-
     PWMGenConfigure(PWM1_BASE, PWM_GEN_1,
                     PWM_GEN_MODE_DOWN | PWM_GEN_MODE_NO_SYNC);
     PWMGenConfigure(PWM1_BASE, PWM_GEN_2,
@@ -421,8 +284,6 @@ main(void)
     // In this case you get: (1 / 250Hz) * 16MHz = 64000 cycles.  Note that
     // the maximum period you can set is 2^16.
     //
-    PWMGenPeriodSet(PWM0_BASE, PWM_GEN_0, 64000);
-
     PWMGenPeriodSet(PWM1_BASE, PWM_GEN_1, 64000);
     PWMGenPeriodSet(PWM1_BASE, PWM_GEN_2, 64000);
     PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, 64000);
@@ -434,11 +295,9 @@ main(void)
     // width is done in the PWM0 load interrupt, which increases the duty
     // cycle by 0.1% everytime the reload interrupt is received.
     //
-    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_0, 64);
-
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2, 64);
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 21312);
-    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, 42624);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_2, GreenLED.Position);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, RedLED.Position);
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, BlueLED.Position);
 
     //
     // Enable processor interrupts.
@@ -449,8 +308,6 @@ main(void)
     // Allow PWM0 generated interrupts.  This configuration is done to
     // differentiate fault interrupts from other PWM0 related interrupts.
     //
-    PWMIntEnable(PWM0_BASE, PWM_INT_GEN_0);
-
     PWMIntEnable(PWM1_BASE, PWM_INT_GEN_1);
     PWMIntEnable(PWM1_BASE, PWM_INT_GEN_2);
     PWMIntEnable(PWM1_BASE, PWM_INT_GEN_3);
@@ -458,8 +315,6 @@ main(void)
     //
     // Enable the PWM0 LOAD interrupt on PWM0.
     //
-    PWMGenIntTrigEnable(PWM0_BASE, PWM_GEN_0, PWM_INT_CNT_LOAD);
-
     PWMGenIntTrigEnable(PWM1_BASE, PWM_GEN_1, PWM_INT_CNT_LOAD);
     PWMGenIntTrigEnable(PWM1_BASE, PWM_GEN_2, PWM_INT_CNT_LOAD);
     PWMGenIntTrigEnable(PWM1_BASE, PWM_GEN_3, PWM_INT_CNT_LOAD);
@@ -467,8 +322,6 @@ main(void)
     //
     // Enable the PWM0 interrupts on the processor (NVIC).
     //
-    IntEnable(INT_PWM0_0);
-
     IntEnable(INT_PWM1_1);
     IntEnable(INT_PWM1_2);
     IntEnable(INT_PWM1_3);
@@ -476,8 +329,6 @@ main(void)
     //
     // Enable the PWM0 output signal (PD0).
     //
-    PWMOutputState(PWM0_BASE, PWM_OUT_0_BIT, true);
-
     PWMOutputState(PWM1_BASE, PWM_OUT_2_BIT, true);
     PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT, true);
     PWMOutputState(PWM1_BASE, PWM_OUT_6_BIT, true);
@@ -485,8 +336,6 @@ main(void)
     //
     // Enables the PWM generator block.
     //
-    PWMGenEnable(PWM0_BASE, PWM_GEN_0);
-
     PWMGenEnable(PWM1_BASE, PWM_GEN_1);
     PWMGenEnable(PWM1_BASE, PWM_GEN_2);
     PWMGenEnable(PWM1_BASE, PWM_GEN_3);
@@ -497,9 +346,8 @@ main(void)
     //
     while(1)
     {
-        //
-        // Print out indication on the console that the program is running.
-        //
-        PrintRunningDots();
+    	if(GreenLED.Target > g_MaxVal) g_MaxVal = GreenLED.Target;
+    	if(RedLED.Target > g_MaxVal) g_MaxVal = RedLED.Target;
+    	if(BlueLED.Target > g_MaxVal) g_MaxVal = BlueLED.Target;
     }
 }
